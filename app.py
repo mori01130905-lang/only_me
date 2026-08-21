@@ -659,6 +659,96 @@ def api_chats_post():
     return jsonify({"ok": False, "why": "unknown action"}), 400
 
 
+# ---------- 8. 记忆管理（Memory Center） ----------
+
+def _memory_source_name(cid):
+    """记忆的来源会话名（显示用）。"""
+    if not cid:
+        return ""
+    s = db.get_session(cid)
+    return (s["name"] or ("会话 #%d" % cid)) if s else ""
+
+
+def _memory_to_client(m):
+    """db 记忆行 → 前端要的 JSON 结构。"""
+    meta = m.get("metadata") or {}
+    return {
+        "id": m["id"],
+        "content": m["content"],
+        "kind": meta.get("kind", "fact"),
+        "keywords": meta.get("keywords") or [],
+        "intensity": meta.get("intensity", 0),
+        "unresolved": 1 if meta.get("unresolved") else 0,
+        "conversation_id": m.get("conversation_id"),
+        "source_message_id": m.get("source_message_id"),
+        "created_at": m["created_at"],
+        "updated_at": m["updated_at"],
+        "source": _memory_source_name(m.get("conversation_id")),
+    }
+
+
+@app.route("/api/memories")
+def api_memories():
+    """记忆列表：?q= 搜索内容/关键词，?kind= 分类，?active=0 看已删除。"""
+    q = (request.args.get("q") or "").strip() or None
+    kind = (request.args.get("kind") or "").strip() or None
+    active = request.args.get("active")
+    if active is None:
+        active_only = True          # 默认只看 active=1
+    else:
+        active_only = active in ("1", "true", "yes")
+    rows = db.search_memories(q=q, kind=kind, active_only=active_only, limit=300)
+    return jsonify({"ok": True, "memories": [_memory_to_client(m) for m in rows]})
+
+
+@app.route("/api/memories/<int:mid>", methods=["PATCH"])
+def api_memory_update(mid):
+    """编辑一条记忆：可改 content / kind / keywords / unresolved。"""
+    data = request.get_json(silent=True) or {}
+    content = data.get("content")
+    kind = data.get("kind")
+    keywords = data.get("keywords")
+    unresolved = data.get("unresolved")
+
+    if content is not None and (not isinstance(content, str) or not content.strip()):
+        return jsonify({"ok": False, "error": "内容不能为空"}), 400
+    if kind is not None and kind not in ("fact", "preference", "goal", "project", "summary"):
+        return jsonify({"ok": False, "error": "类型不合法"}), 400
+    if keywords is not None:
+        if not isinstance(keywords, list) or not all(isinstance(k, str) for k in keywords):
+            return jsonify({"ok": False, "error": "关键词必须是字符串数组"}), 400
+        keywords = [k.strip() for k in keywords if k.strip()]
+
+    updated = db.update_memory(
+        mid,
+        content=content.strip() if isinstance(content, str) else None,
+        kind=kind,
+        keywords=keywords,
+        unresolved=unresolved,
+    )
+    if updated is None:
+        return jsonify({"ok": False, "error": "记忆不存在"}), 404
+    return jsonify({"ok": True, "memory": _memory_to_client(updated)})
+
+
+@app.route("/api/memories/<int:mid>", methods=["DELETE"])
+def api_memory_delete(mid):
+    """删除记忆：软删除（active=0），数据保留。"""
+    if db.get_memory(mid) is None:
+        return jsonify({"ok": False, "error": "记忆不存在"}), 404
+    db.deactivate_memory(mid)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/memories/<int:mid>/restore", methods=["POST"])
+def api_memory_restore(mid):
+    """恢复一条软删除的记忆（active=1）。"""
+    if db.get_memory(mid) is None:
+        return jsonify({"ok": False, "error": "记忆不存在"}), 404
+    db.restore_memory(mid)
+    return jsonify({"ok": True})
+
+
 def _print_startup_info():
     """启动时在控制台打印状态：key 有没有（打码）、用的哪个模型、地址。"""
     key = os.environ.get("DEEPSEEK_API_KEY", "")

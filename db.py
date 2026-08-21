@@ -280,17 +280,31 @@ def add_memory(content, metadata=None, source_message_id=None, conversation_id=N
 
 
 def get_memories(limit=50, active_only=True):
-    """读记忆，按检索优先级排序：未了结 → 情绪强度 → 时间（新在前）。
+    """读记忆（AI 上下文用），按检索优先级排序。等价于不带筛选的 search_memories。"""
+    return search_memories(q=None, kind=None, active_only=active_only, limit=limit)
 
-    metadata 从 JSON 字符串解析回 dict 再返回。
+
+def search_memories(q=None, kind=None, active_only=True, limit=200):
+    """记忆中心的组合查询：q 搜内容+关键词，kind 精确过滤，active 过滤。
+
+    返回按优先级排序（未了结 → 情绪强度 → 时间新在前）的记忆列表，metadata 已解析。
     """
     with _conn_lock:
         conn = _get_conn()
         sql = ("SELECT id, content, metadata, conversation_id, source_message_id,"
-               " created_at, updated_at, active FROM memories")
+               " created_at, updated_at, active FROM memories WHERE 1=1")
         params = []
-        if active_only:
-            sql += " WHERE active = 1"
+        if active_only is not None:
+            sql += " AND active = ?"
+            params.append(1 if active_only else 0)
+        if kind:
+            sql += " AND json_extract(metadata, '$.kind') = ?"
+            params.append(kind)
+        if q:
+            sql += " AND (content LIKE ? OR metadata LIKE ?)"
+            like = "%" + q + "%"
+            params.append(like)
+            params.append(like)
         sql += (" ORDER BY COALESCE(json_extract(metadata, '$.unresolved'), 0) DESC,"
                 " COALESCE(json_extract(metadata, '$.intensity'), 0) DESC,"
                 " updated_at DESC, id DESC LIMIT ?")
@@ -305,6 +319,83 @@ def get_memories(limit=50, active_only=True):
                 d["metadata"] = {}
             out.append(d)
         return out
+
+
+def get_memory(memory_id):
+    """按 id 查一条记忆；metadata 解析好。不存在返回 None。"""
+    with _conn_lock:
+        conn = _get_conn()
+        row = conn.execute(
+            "SELECT id, content, metadata, conversation_id, source_message_id,"
+            " created_at, updated_at, active FROM memories WHERE id = ?",
+            (memory_id,)).fetchone()
+        if row is None:
+            return None
+        d = dict(row)
+        try:
+            d["metadata"] = json.loads(d["metadata"] or "{}")
+        except ValueError:
+            d["metadata"] = {}
+        return d
+
+
+def update_memory(memory_id, content=None, kind=None, keywords=None,
+                  unresolved=None, intensity=None):
+    """更新一条记忆：只改传入的字段，自动 updated_at；created_at/active 不动。
+
+    返回更新后的记忆（dict）；不存在返回 None。
+    """
+    with _conn_lock:
+        conn = _get_conn()
+        row = conn.execute(
+            "SELECT content, metadata FROM memories WHERE id = ?",
+            (memory_id,)).fetchone()
+        if row is None:
+            return None
+        meta = {}
+        try:
+            meta = json.loads(row["metadata"] or "{}")
+        except ValueError:
+            meta = {}
+        if kind is not None:
+            meta["kind"] = kind
+        if keywords is not None:
+            meta["keywords"] = keywords
+        if unresolved is not None:
+            meta["unresolved"] = 1 if unresolved else 0
+        if intensity is not None:
+            try:
+                meta["intensity"] = max(0, min(5, int(intensity)))
+            except (TypeError, ValueError):
+                pass
+        new_content = row["content"] if content is None else content
+        conn.execute(
+            "UPDATE memories SET content = ?, metadata = ?, updated_at = ?"
+            " WHERE id = ?",
+            (new_content, json.dumps(meta, ensure_ascii=False),
+             int(time.time()), memory_id))
+        conn.commit()
+        row2 = conn.execute(
+            "SELECT id, content, metadata, conversation_id, source_message_id,"
+            " created_at, updated_at, active FROM memories WHERE id = ?",
+            (memory_id,)).fetchone()
+        d = dict(row2)
+        try:
+            d["metadata"] = json.loads(d["metadata"] or "{}")
+        except ValueError:
+            d["metadata"] = {}
+        return d
+
+
+def restore_memory(memory_id):
+    """恢复一条软删除的记忆（active=1）。存在则恢复并返回 True，否则 False。"""
+    with _conn_lock:
+        conn = _get_conn()
+        cur = conn.execute(
+            "UPDATE memories SET active = 1, updated_at = ? WHERE id = ?",
+            (int(time.time()), memory_id))
+        conn.commit()
+        return cur.rowcount > 0
 
 
 def search_messages_across_sessions(keywords, limit=5, exclude_sid=None):

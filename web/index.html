@@ -1595,6 +1595,46 @@ html[data-theme="dark"] .crow { border-color: rgba(255,255,255,.1); box-shadow: 
 html:not([data-theme="light"]) #newSession { background: #f5f4ef; color: #262624; }
 }
 html[data-theme="dark"] #newSession { background: #f5f4ef; color: #262624; }
+  /* ============ 我的记忆（Memory Center） ============ */
+  .mc-search { display: flex; align-items: center; gap: 8px; margin: 4px 2px 10px; }
+  .mc-search input { flex: 1; min-width: 0; border: 0; outline: none; background: var(--panel);
+    color: var(--text); font-size: 15px; padding: 10px 14px; border-radius: 12px; }
+  .mc-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+  .mc-chip { border: 0; background: var(--panel); color: var(--dim); font-size: 13px;
+    padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+  .mc-chip.on { background: var(--card); color: var(--accent); font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .mc-card { background: var(--card); border-radius: 14px; padding: 12px 14px; margin-bottom: 8px;
+    cursor: pointer; }
+  .mc-card:active { transform: scale(.995); }
+  .mc-card .c-txt { font-size: 14.5px; line-height: 1.55; word-break: break-word; }
+  .mc-card .c-meta { margin-top: 7px; display: flex; align-items: center; gap: 8px;
+    font-size: 12px; color: var(--dim); flex-wrap: wrap; }
+  .mc-tag { background: var(--panel); padding: 2px 8px; border-radius: 999px; color: var(--dim); }
+  .mc-empty, .mc-err { text-align: center; padding: 44px 12px; color: var(--dim); font-size: 14px; line-height: 1.9; }
+  .mc-err { color: var(--red); }
+  .mc-detail { padding: 4px 2px; }
+  .mc-detail .d-txt { font-size: 15.5px; line-height: 1.75; white-space: pre-wrap; word-break: break-word;
+    background: var(--panel); padding: 14px; border-radius: 14px; margin-bottom: 10px; }
+  .mc-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+    padding: 11px 2px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  .mc-row:last-of-type { border-bottom: 0; }
+  .mc-row .k { color: var(--dim); flex: none; }
+  .mc-row .v { text-align: right; word-break: break-all; }
+  .mc-kws { display: inline-flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+  .mc-kw { background: var(--panel); padding: 3px 9px; border-radius: 999px; font-size: 12px; color: var(--dim); }
+  .mc-actions { display: flex; gap: 10px; margin-top: 18px; }
+  .mc-btn { flex: 1; border: 0; border-radius: 12px; padding: 12px 0; font-size: 14.5px;
+    cursor: pointer; background: var(--panel); color: var(--text); }
+  .mc-btn:active { transform: scale(.99); }
+  .mc-btn.danger { background: var(--red-track); color: var(--red); }
+  .mc-btn.primary { background: var(--accent); color: #fff; }
+  .mc-field { margin-bottom: 14px; }
+  .mc-field label { display: block; font-size: 12.5px; color: var(--dim); margin: 0 0 6px 2px; }
+  .mc-field textarea, .mc-field input, .mc-field select { width: 100%; border: 0; outline: none;
+    background: var(--panel); color: var(--text); font-size: 14.5px; border-radius: 12px;
+    padding: 11px 13px; font-family: inherit; resize: vertical; }
+  .mc-delnote { font-size: 12px; color: var(--dim); text-align: center; margin-top: 14px; line-height: 1.7; }
 </style>
 </head>
 <body>
@@ -1707,7 +1747,24 @@ html[data-theme="dark"] #newSession { background: #f5f4ef; color: #262624; }
         <button class="grow" id="themeRow"><span class="ic" data-i="moon"></span>夜间模式<span class="sw wait" id="themeSw"></span></button>
         <button class="grow" id="apiRow"><span class="ic" data-i="bolt"></span>接入 API<span class="val" id="apiVal">…</span><span class="chev">›</span></button>
       </div>
+      <div class="group-label">记忆</div>
+      <div class="group">
+        <button class="grow" id="memoryRow"><span class="ic" data-i="book"></span>我的记忆<span class="val">看看 AI 记住了什么</span><span class="chev">›</span></button>
+      </div>
     </div>
+  </div>
+</div>
+
+<div class="sheetWrap" id="memorySheet">
+  <div class="shade" data-close="memory"></div>
+  <div class="sheet">
+    <div class="grabber"></div>
+    <div class="head">
+      <button class="hbtn" id="memBack" style="display:none"><span class="ic" data-i="chevL"></span></button>
+      <div class="ht" id="memTitle">我的记忆</div>
+      <button class="hbtn" data-close="memory"><span class="ic" data-i="x"></span></button>
+    </div>
+    <div class="body" id="memBody"></div>
   </div>
 </div>
 
@@ -2688,7 +2745,8 @@ function renderGroupLine() {
   curGroup.labelEl.innerHTML = html;
 }
 function escapeHtml(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function addToolUse(part) {
@@ -3479,6 +3537,7 @@ document.addEventListener('touchend', (e) => {
 const sheets = {
   api: document.getElementById('apiSheet'),
   settings: document.getElementById('settingsSheet'),
+  memory: document.getElementById('memorySheet'),
   usage: document.getElementById('usageSheet'),
   model: document.getElementById('modelSheet'),
   add: document.getElementById('addSheet'),
@@ -5315,6 +5374,195 @@ Object.entries(sheets).forEach(([k, wrap]) => {
 document.getElementById('avatarBtn').onclick = () => { closeDrawer(); sheets.settings.classList.add('open'); };
 document.getElementById('usageRow').onclick = () => { sheets.usage.classList.add('open'); loadUsage(); };
 document.getElementById('apiRow').onclick = () => note('（这是备用通道的占位——真到要用的那天，把 API key 给我，我把自己接回来）');
+
+/* ---------- 我的记忆（Memory Center） ---------- */
+const MEM_KIND = { fact: '关于我', preference: '偏好', goal: '目标', project: '项目', summary: '对话摘要' };
+const memState = { q: '', kind: '', deleted: false };
+let memList = [];
+
+document.getElementById('memoryRow').onclick = () => {
+  sheets.settings.classList.remove('open');
+  sheets.memory.classList.add('open');
+  memState.q = ''; memState.kind = ''; memState.deleted = false;
+  loadMemories();
+};
+
+function fmtDate(ts) {
+  if (!ts) return '';
+  const d = new Date(ts * 1000);
+  const p = n => (n < 10 ? '0' + n : n);
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+    + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+function memQuery() {
+  const p = new URLSearchParams();
+  if (memState.q) p.set('q', memState.q);
+  if (memState.kind) p.set('kind', memState.kind);
+  if (memState.deleted) p.set('active', '0');
+  return p.toString();
+}
+
+async function loadMemories() {
+  const body = document.getElementById('memBody');
+  body.innerHTML = '<div class="mc-empty">正在加载记忆……</div>';
+  try {
+    const r = await fetch('api/memories?' + memQuery(), { cache: 'no-store' });
+    const d = await r.json();
+    if (!d.ok) throw 0;
+    memList = d.memories || [];
+    renderMemList();
+  } catch (e) {
+    body.innerHTML = '<div class="mc-err">加载记忆失败，请稍后重试</div>';
+  }
+}
+
+function renderMemList() {
+  const body = document.getElementById('memBody');
+  document.getElementById('memBack').style.display = 'none';
+  document.getElementById('memTitle').textContent = '我的记忆';
+  if (!memList.length) {
+    body.innerHTML = '<div class="mc-empty">' + (memState.deleted
+      ? '没有已删除的记忆'
+      : '🧠 还没有记忆<br><br>和我多聊一些吧。<br>我会在对话中自动发现那些值得长期记住的信息。') + '</div>';
+    return;
+  }
+  let html = '<div class="mc-search"><input id="memQ" placeholder="搜索记忆…" value="' + escapeHtml(memState.q) + '"></div>';
+  html += '<div class="mc-chips">';
+  const chips = [['', '全部'], ['fact', '关于我'], ['preference', '偏好'], ['goal', '目标'], ['project', '项目'], ['summary', '对话摘要'], ['del', '已删除']];
+  for (const [k, label] of chips) {
+    const on = k === 'del' ? memState.deleted : memState.kind === k;
+    html += '<button class="mc-chip' + (on ? ' on' : '') + '" data-k="' + k + '">' + label + '</button>';
+  }
+  html += '</div>';
+  html += '<div id="memCards">';
+  for (const m of memList) {
+    html += '<div class="mc-card" data-id="' + m.id + '">'
+      + '<div class="c-txt">' + escapeHtml(m.content) + '</div>'
+      + '<div class="c-meta"><span class="mc-tag">' + (MEM_KIND[m.kind] || '其他') + '</span>'
+      + (m.unresolved ? '<span class="mc-tag">未完成</span>' : '')
+      + '<span>' + fmtDate(m.updated_at) + '</span></div>'
+      + '</div>';
+  }
+  html += '</div>';
+  body.innerHTML = html;
+  document.getElementById('memQ').oninput = () => {
+    memState.q = document.getElementById('memQ').value.trim();
+    loadMemories();
+  };
+  body.querySelectorAll('.mc-chip').forEach(ch => ch.onclick = () => {
+    const k = ch.dataset.k;
+    if (k === 'del') {
+      memState.deleted = !memState.deleted;
+      if (memState.deleted) memState.kind = '';
+    } else {
+      memState.kind = memState.kind === k ? '' : k;
+      if (memState.kind) memState.deleted = false;
+    }
+    loadMemories();
+  });
+  body.querySelectorAll('.mc-card').forEach(c => c.onclick = () => openMemDetail(Number(c.dataset.id)));
+}
+
+function openMemDetail(id) {
+  const m = memList.find(x => x.id === id);
+  if (!m) return;
+  document.getElementById('memBack').style.display = '';
+  document.getElementById('memBack').onclick = renderMemList;
+  document.getElementById('memTitle').textContent = '记忆详情';
+  let html = '<div class="mc-detail"><div class="d-txt">' + escapeHtml(m.content) + '</div>';
+  html += '<div class="mc-row"><span class="k">类型</span><span class="v">' + (MEM_KIND[m.kind] || '其他') + '</span></div>';
+  if (m.keywords && m.keywords.length) {
+    html += '<div class="mc-row"><span class="k">关键词</span><span class="v"><span class="mc-kws">'
+      + m.keywords.map(k => '<span class="mc-kw">' + escapeHtml(k) + '</span>').join('')
+      + '</span></span></div>';
+  }
+  html += '<div class="mc-row"><span class="k">未完成</span><span class="v">' + (m.unresolved ? '是' : '否') + '</span></div>';
+  html += '<div class="mc-row"><span class="k">创建时间</span><span class="v">' + fmtDate(m.created_at) + '</span></div>';
+  html += '<div class="mc-row"><span class="k">最后更新</span><span class="v">' + fmtDate(m.updated_at) + '</span></div>';
+  if (m.source) html += '<div class="mc-row"><span class="k">来源</span><span class="v">' + escapeHtml(m.source) + '</span></div>';
+  html += '<div class="mc-actions">';
+  if (memState.deleted) {
+    html += '<button class="mc-btn primary" id="memRestore">恢复</button>';
+  } else {
+    html += '<button class="mc-btn" id="memEdit">编辑</button>';
+    html += '<button class="mc-btn danger" id="memDel">删除</button>';
+  }
+  html += '</div>';
+  if (!memState.deleted) html += '<div class="mc-delnote">删除后，AI 将不再在未来的对话中使用这条信息。</div>';
+  html += '</div>';
+  document.getElementById('memBody').innerHTML = html;
+  const e = document.getElementById('memEdit');
+  if (e) e.onclick = () => openMemEdit(id);
+  const d = document.getElementById('memDel');
+  if (d) d.onclick = () => delMem(id);
+  const r = document.getElementById('memRestore');
+  if (r) r.onclick = () => restoreMem(id);
+}
+
+function openMemEdit(id) {
+  const m = memList.find(x => x.id === id);
+  if (!m) return;
+  document.getElementById('memTitle').textContent = '编辑记忆';
+  document.getElementById('memBack').style.display = '';
+  document.getElementById('memBack').onclick = () => openMemDetail(id);
+  let html = '<div class="mc-detail">';
+  html += '<div class="mc-field"><label>内容</label><textarea id="meC" rows="3">' + escapeHtml(m.content) + '</textarea></div>';
+  html += '<div class="mc-field"><label>类型</label><select id="meK">';
+  for (const k of ['fact', 'preference', 'goal', 'project', 'summary']) {
+    html += '<option value="' + k + '"' + (m.kind === k ? ' selected' : '') + '>' + MEM_KIND[k] + '</option>';
+  }
+  html += '</select></div>';
+  html += '<div class="mc-field"><label>关键词（空格或逗号分隔）</label><input id="meW" value="' + escapeHtml((m.keywords || []).join(' ')) + '"></div>';
+  html += '<div class="mc-field"><label>状态</label><div><button class="mc-chip' + (m.unresolved ? ' on' : '') + '" id="meU">未完成</button></div></div>';
+  html += '<div class="mc-actions"><button class="mc-btn" id="meCancel">取消</button><button class="mc-btn primary" id="meSave">保存</button></div>';
+  html += '</div>';
+  document.getElementById('memBody').innerHTML = html;
+  let unresolved = !!m.unresolved;
+  document.getElementById('meU').onclick = () => {
+    unresolved = !unresolved;
+    document.getElementById('meU').classList.toggle('on', unresolved);
+  };
+  document.getElementById('meCancel').onclick = () => openMemDetail(id);
+  document.getElementById('meSave').onclick = async () => {
+    const content = document.getElementById('meC').value.trim();
+    const kind = document.getElementById('meK').value;
+    const keywords = document.getElementById('meW').value.split(/[\s,，]+/).filter(Boolean);
+    if (!content) { note('（内容不能为空）', 'err'); return; }
+    try {
+      const r = await fetch('api/memories/' + id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, kind, keywords, unresolved })
+      });
+      const d = await r.json();
+      if (!d.ok) throw 0;
+      note('（改好了）');
+      loadMemories();
+    } catch (e) { note('（没改成）', 'err'); }
+  };
+}
+
+async function delMem(id) {
+  if (!confirm('删除这条记忆？\n\n删除后，AI 将不再在未来的对话中使用这条信息。')) return;
+  try {
+    const r = await fetch('api/memories/' + id, { method: 'DELETE' });
+    const d = await r.json();
+    if (!d.ok) throw 0;
+    note('（已删除）');
+    loadMemories();
+  } catch (e) { note('（没删成）', 'err'); }
+}
+
+async function restoreMem(id) {
+  try {
+    const r = await fetch('api/memories/' + id + '/restore', { method: 'POST' });
+    const d = await r.json();
+    if (!d.ok) throw 0;
+    note('（恢复了）');
+    loadMemories();
+  } catch (e) { note('（没恢复成）', 'err'); }
+}
 function setArmed(on) {
   armedFresh = on;
   document.querySelector('.freshtip')?.remove();
