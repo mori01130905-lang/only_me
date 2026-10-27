@@ -24,7 +24,11 @@ python app.py
 
 浏览器打开 <http://127.0.0.1:5000/>（`AUTO_OPEN=0` 可以关掉自动开浏览器）
 
-### 上云（手机随时能用）
+### 现在实际在用的方案（手机随时能用）
+
+见 [RUNBOOK.md](RUNBOOK.md)：家里电脑 + Tailscale，网址 `https://dwell.taild9fc55.ts.net`，不要卡。
+
+### 上云（以后想彻底摆脱电脑再看）
 
 后端跑在 Render、数据库用 Supabase 的 Postgres、前端放 Netlify，
 一步步的操作写在 [DEPLOY.md](DEPLOY.md) 里。设了 `DWELL_DATABASE_URL`
