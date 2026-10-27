@@ -24,6 +24,12 @@ python app.py
 
 浏览器打开 <http://127.0.0.1:5000/>（`AUTO_OPEN=0` 可以关掉自动开浏览器）
 
+### 上云（手机随时能用）
+
+后端跑在 Render、数据库用 Supabase 的 Postgres、前端放 Netlify，
+一步步的操作写在 [DEPLOY.md](DEPLOY.md) 里。设了 `DWELL_DATABASE_URL`
+就会自动切到云端数据库，代码一行都不用改。
+
 ## 环境变量
 
 | 变量 | 说明 | 默认 |
@@ -32,6 +38,12 @@ python app.py
 | `DEEPSEEK_BASE_URL` | API 地址 | `https://api.deepseek.com` |
 | `DEEPSEEK_MODEL` | 模型名 | `deepseek-v4-flash` |
 | `AUTO_OPEN` | 启动时是否自动开浏览器 | `1` |
+| `DWELL_HOST` | 监听地址（`0.0.0.0` 才允许局域网访问） | `127.0.0.1` |
+| `DWELL_PORT` | 端口 | `5000` |
+| `DWELL_DATABASE_URL` | 以 `postgres` 开头就用 Postgres，否则用本地 SQLite | 无 |
+| `DWELL_PASS` | 访问口令；设了就要先登录，不设则本机不设防 | 无 |
+| `SECRET_KEY` | 登录 cookie 的签名密钥 | 按口令派生 |
+| `DWELL_DEBUG` | 设 `1` 开调试模式（不要用于公网） | `0` |
 
 也可以用项目目录下的 `.env` 文件配置（每行 `KEY=VALUE`，真实环境变量优先）。
 
@@ -40,6 +52,11 @@ python app.py
 - `app.py` —— Flask 后端：聊天主链路（发送 / 流式事件 / 历史 / 打断 / 新会话）+ 前端加载时要用的小接口
 - `web/index.html` —— 前端界面（聊天、锁屏、设置等）
 - `start.bat` —— 一键启动入口（双击）
+- `db.py` —— 存储接口层：本地 SQLite / 云端 Postgres，一套接口两种底座
+- `render.yaml` —— Render 部署蓝图
+- `scripts/migrate_to_pg.py` —— 把本地库搬到 Supabase
+- `web/manifest.json`、`web/sw.js`、`web/icons/` —— PWA 用的资产
+- `DEPLOY.md` —— 上云部署步骤
 - `requirements.txt` —— Python 依赖（`flask` + `openai`）
 
 ## 当前进度
@@ -58,4 +75,10 @@ python app.py
   - [x] AI 自动起名（新会话第一轮对话后自动起名，手动改名保留优先）
   - [x] 跨窗口回顾（切换窗口后，AI 能按关键词检索其他窗口的历史和记忆）
   - [x] Memory Center（设置 → 我的记忆：查看 / 搜索 / 分类 / 详情 / 编辑 / 软删除 / 恢复）
+- [x] 上云能力（V0.3）：
+  - [x] 数据层双后端（本地 SQLite / 云端 Postgres），函数接口不变
+  - [x] 口令登录 + 登录页（公网可用）
+  - [x] 生产部署（gunicorn 单进程多线程、健康检查、关调试）
+  - [x] PWA：manifest / 图标 / service worker，可装到手机主屏
+  - [x] Netlify 反向代理模板 + Render 蓝图 + 数据搬迁脚本
 - [ ] 日记 / 待办 / 日历等独立功能

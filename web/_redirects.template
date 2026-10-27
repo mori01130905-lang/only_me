@@ -1,0 +1,11 @@
+# Netlify 反向代理配置
+#
+# 作用：浏览器访问 <你的>.netlify.app/api/... 时，Netlify 在背后转发给 Render 上的后端。
+# 好处：前端和后端在浏览器看来是同一个站点 —— 不用配 CORS，登录 cookie 也能正常用。
+#
+# 用法：把下面这行的地址换成你的 Render 服务地址，然后把本文件改名为 `_redirects`
+#      （去掉 .template 后缀），再把这个 web 文件夹拖到 Netlify 的 Deploys 页面。
+#
+# 注意：Netlify 代理的超时是 26 秒，所以后端 app.py 里的 /api/poll 只等 12 秒。
+
+/api/*  https://REPLACE-ME.onrender.com/api/:splat  200
