@@ -1,0 +1,29 @@
+# Render 部署配置（蓝图）
+# 用法：Render 后台 → New → Blueprint → 选这个仓库，它会读这份文件。
+# 标了 sync: false 的变量不会进 git，需要在 Render 后台手动填。
+services:
+  - type: web
+    name: dwell
+    runtime: python
+    plan: free
+    region: singapore          # 离国内近一点；也可改 oregon / frankfurt
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --workers 1 --threads 8 --timeout 120 --bind 0.0.0.0:$PORT
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: DWELL_DEBUG
+        value: "0"
+      - key: DEEPSEEK_MODEL
+        value: deepseek-v4-flash
+      # ---- 下面这些要自己填（不进 git）----
+      - key: DWELL_DATABASE_URL
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DWELL_PASS
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true

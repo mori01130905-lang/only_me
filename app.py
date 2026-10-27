@@ -8,8 +8,14 @@ dwell 前端 —— 聊天主线最小后端（DeepSeek 版）
   DEEPSEEK_API_KEY   你的 DeepSeek API key
 
 可选环境变量：
-  DEEPSEEK_BASE_URL  默认 https://api.deepseek.com
-  DEEPSEEK_MODEL     默认 deepseek-v4-flash
+  DEEPSEEK_BASE_URL   默认 https://api.deepseek.com
+  DEEPSEEK_MODEL      默认 deepseek-v4-flash
+  DWELL_HOST          默认 127.0.0.1（只给本机用；要对局域网开放才设 0.0.0.0）
+  DWELL_PORT          默认 5000
+  DWELL_DATABASE_URL  以 postgres 开头就用 Postgres/Supabase，否则用本地 SQLite
+  DWELL_PASS          访问口令；设了就要求先登录，不设则完全不设防（只适合本机）
+  SECRET_KEY          登录 cookie 的签名密钥；不设会按口令派生（重启不掉登录）
+  DWELL_DEBUG         默认 0；设 1 才开调试模式（绝对不要带到公网）
 
 运行方式：
   pip install flask openai
@@ -18,16 +24,20 @@ dwell 前端 —— 聊天主线最小后端（DeepSeek 版）
   然后浏览器打开 http://127.0.0.1:5000/
 """
 
+import datetime
+import hashlib
 import json
 import os
 import re
+import socket
 import threading
 import time
 import webbrowser
 
 import db
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import (Flask, Response, jsonify, redirect, request, session,
+                   send_from_directory)
 from openai import OpenAI
 
 
@@ -60,6 +70,83 @@ app = Flask(__name__, static_folder=None)
 BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash")
 # 系统提示词已进 settings 表（默认值见 db.DEFAULT_SETTINGS，启动时自动落库）
+
+# 监听地址：0.0.0.0 = 手机/局域网也能访问；只想本机访问就设 DWELL_HOST=127.0.0.1
+HOST = os.environ.get("DWELL_HOST", "127.0.0.1")
+PORT = int(os.environ.get("DWELL_PORT", "5000"))
+
+DEBUG = os.environ.get("DWELL_DEBUG", "0").strip().lower() not in ("0", "", "false", "no")
+
+# ---------- 访问控制 ----------
+# 有了这道门，这个服务才敢挂在公网上：没登录只会看到一页口令输入框。
+# 本机自己用时不用设 DWELL_PASS，行为跟以前一模一样。
+PASS = os.environ.get("DWELL_PASS", "")
+app.secret_key = os.environ.get("SECRET_KEY") or hashlib.sha256(
+    ("dwell::" + (PASS or "local-only")).encode()).hexdigest()
+app.permanent_session_lifetime = datetime.timedelta(days=180)
+
+LOGIN_HTML = """<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>进门前先敲一下</title><style>
+body{margin:0;min-height:100dvh;display:flex;align-items:center;justify-content:center;
+background:#faf9f5;color:#2b2a27;font:16px/1.7 -apple-system,"PingFang SC","Noto Sans SC",sans-serif}
+.card{width:min(86vw,340px);text-align:center}
+h1{font-size:17px;font-weight:600;margin:0 0 18px}
+input{width:100%;box-sizing:border-box;border:0;outline:none;border-radius:14px;padding:14px 16px;
+font:inherit;background:#f0eee6;color:#2b2a27;margin-bottom:12px}
+button{width:100%;border:0;border-radius:14px;padding:14px;font:inherit;background:#c96442;color:#fff}
+.err{color:#c0392b;font-size:14px;min-height:22px;margin:0 0 10px}
+</style></head><body><form class="card" method="post">
+<h1>这是私人地方</h1><p class="err">{ERR}</p>
+<input name="p" type="password" placeholder="口令" autofocus autocomplete="current-password">
+<button type="submit">进去</button></form></body></html>"""
+
+
+@app.before_request
+def _auth_gate():
+    if not PASS:                                  # 本机用：不设防
+        return None
+    if request.path in ("/login", "/healthz", "/favicon.ico"):
+        return None
+    if session.get("ok"):
+        return None
+    if request.args.get("k") == PASS:             # 手机上第一次打开可以直接带口令
+        session["ok"] = True
+        session.permanent = True
+        return redirect(request.path)
+    if request.path.startswith("/api/"):
+        return jsonify({"ok": False, "error": "unauthorized"}), 401
+    return redirect("/login")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if not PASS:
+        return redirect("/")
+    err = ""
+    if request.method == "POST":
+        if (request.form.get("p") or "") == PASS:
+            session["ok"] = True
+            session.permanent = True
+            return redirect("/")
+        err = "口令不对，再试一次"
+    return Response(LOGIN_HTML.replace("{ERR}", err), mimetype="text/html")
+
+
+@app.after_request
+def _headers(resp):
+    if request.path.startswith("/api/"):
+        resp.headers["Cache-Control"] = "no-store, max-age=0"   # 反代/CDN 别缓存轮询
+    resp.headers["X-Robots-Tag"] = "noindex, nofollow"          # 别进搜索引擎
+    resp.headers["Referrer-Policy"] = "no-referrer"
+    return resp
+
+
+@app.route("/healthz")
+def healthz():
+    """给 Render 的保活探针用：不进数据库，也不要求登录。"""
+    return jsonify({"ok": True, "db": db.backend_name(), "version": 3})
+
 
 # 前端 index.html 放在这个目录旁边的 web/ 文件夹里
 WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
@@ -176,7 +263,7 @@ def api_messages():
 def api_poll():
     since = int(request.args.get("since", 0))
     # 简单起见用短超时轮询而不是真的 hang 住连接；前端本来就是失败了自己重试
-    deadline = time.time() + 25
+    deadline = time.time() + 12      # 别超过反代的 26 秒上限
     while time.time() < deadline:
         with events_lock:
             new = events[since:]
@@ -749,8 +836,22 @@ def api_memory_restore(mid):
     return jsonify({"ok": True})
 
 
+def _lan_ips():
+    """检测电脑的局域网 IP（给手机访问用）。"""
+    ips = set()
+    try:
+        hostname = socket.gethostname()
+        for info in socket.getaddrinfo(hostname, None, socket.AF_INET):
+            ip = info[4][0]
+            if not ip.startswith("127."):
+                ips.add(ip)
+    except Exception:
+        pass
+    return sorted(ips)
+
+
 def _print_startup_info():
-    """启动时在控制台打印状态：key 有没有（打码）、用的哪个模型、地址。"""
+    """启动时在控制台打印状态：key 有没有（打码）、模型、本机和手机访问地址。"""
     key = os.environ.get("DEEPSEEK_API_KEY", "")
     masked = ("sk-****" + key[-4:]) if key else "未设置（聊天时会提示你配好）"
     print("=" * 44)
@@ -758,15 +859,19 @@ def _print_startup_info():
     print("=" * 44)
     print(" 模型   :", MODEL)
     print(" API key:", masked)
-    print(" 地址   : http://127.0.0.1:5000/")
+    print(" 本机   : http://127.0.0.1:%d/" % PORT)
+    if HOST in ("0.0.0.0", "::"):
+        for ip in _lan_ips():
+            print(" 手机访问: http://%s:%d/  （手机连同一个 WiFi）" % (ip, PORT))
     print("=" * 44)
 
 
 if __name__ == "__main__":
     # debug 重载器会先起父进程再起子进程：只有真正干活的子进程才有
     # WERKZEUG_RUN_MAIN=true，打印状态和开浏览器都只在这一份里做一次。
-    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+    if not DEBUG or os.environ.get("WERKZEUG_RUN_MAIN") == "true":
         _print_startup_info()
-        if os.environ.get("AUTO_OPEN", "1") != "0":
-            threading.Timer(1.5, lambda: webbrowser.open("http://127.0.0.1:5000/")).start()
-    app.run(debug=True, port=5000)
+        if (os.environ.get("AUTO_OPEN", "1") != "0"
+                and HOST in ("127.0.0.1", "localhost")):
+            threading.Timer(1.5, lambda: webbrowser.open("http://127.0.0.1:%d/" % PORT)).start()
+    app.run(host=HOST, port=PORT, debug=DEBUG)

@@ -6655,5 +6655,14 @@ document.addEventListener('touchend', (e) => {
 
 box.focus();
 </script>
+
+<!-- dwell-sw-register：装到手机主屏用（不影响原有推送逻辑） -->
+<script>
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
 </body>
 </html>

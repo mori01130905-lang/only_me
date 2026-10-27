@@ -1,2 +1,4 @@
 flask
 openai
+gunicorn
+psycopg[binary]
