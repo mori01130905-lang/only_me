@@ -543,6 +543,16 @@ html[data-theme="dark"] .composer {
     font-size: 15.5px; border-radius: 10px;
   }
   .nav .recent:active { background: var(--panel); }
+  /* 抽屉里直接铺开的窗口列表 */
+  #drawerChats { display: flex; flex-direction: column; padding-bottom: 6px; }
+  #drawerChats .dc {
+    display: block; width: 100%; text-align: left; padding: 9px 14px;
+    font-size: 15px; border-radius: 10px; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #drawerChats .dc.on { background: var(--panel); font-weight: 600; }
+  #drawerChats .dc:active { background: var(--panel); }
+  #drawerChats .dc-empty { padding: 8px 14px 10px; font-size: 13.5px; color: var(--dim); }
   .drawer-foot { flex: none; display: flex; align-items: center; padding: 10px 20px 0; }
   #avatarBtn {
     width: 44px; height: 44px; border-radius: 50%; background: var(--card);
@@ -1751,8 +1761,8 @@ html[data-theme="dark"] #newSession { background: #f5f4ef; color: #262624; }
       <button class="item" id="navNews"><span class="ic" data-i="fileText"></span>日报</button>
       <button class="item" id="navHealth"><span class="ic" data-i="heartIc"></span>健康</button>
       <button class="item" id="navRepo"><span class="ic" data-i="box"></span>仓库</button>
-      <div class="sect"></div>
-      <button class="item" id="navChat"><span class="ic" data-i="chat"></span>Chat</button>
+      <div class="sect">Chat</div>
+      <div id="drawerChats"></div>
     </div>
     <div class="drawer-foot">
       <button id="avatarBtn" title="我的主页">Me</button>
@@ -3582,6 +3592,7 @@ new ResizeObserver(() => {
 /* ---------- 抽屉 / 弹层 ---------- */
 const drawerWrap = document.getElementById('drawerWrap');
 function openDrawer() {
+  renderDrawerChats();
   drawerWrap.classList.add('open');
   requestAnimationFrame(() => drawerWrap.classList.add('show'));
 }
@@ -3598,11 +3609,34 @@ document.getElementById('menuBtn').onclick = async () => {
   openDrawer();
 };
 
-document.getElementById('navChat').onclick = () => {
-  closeDrawer();
-  sheets.chats.classList.add('open');
-  loadChats();
-};
+/* 抽屉里的窗口列表：直接铺在 Chat 下面，点一下就换过去，不跳页 */
+async function renderDrawerChats() {
+  const box = document.getElementById('drawerChats');
+  if (!box) return;
+  try {
+    const d = await (await fetch('api/chats?scope=live', { cache: 'no-store' })).json();
+    const items = (d.items || []).slice(0, 30);
+    box.innerHTML = '';
+    if (!items.length) {
+      box.innerHTML = '<div class="dc-empty">还没有窗口</div>';
+      return;
+    }
+    items.forEach(it => {
+      const b = document.createElement('button');
+      b.className = 'dc' + (it.current ? ' on' : '');
+      b.textContent = it.name || '没名字';
+      b.title = it.name || '';
+      b.onclick = async () => {
+        closeDrawer();
+        if (it.current) return;
+        await switchChat(it);
+      };
+      box.appendChild(b);
+    });
+  } catch (e) {
+    box.innerHTML = '<div class="dc-empty">拿不到窗口清单</div>';
+  }
+}
 function closeDrawer() {
   drawerWrap.classList.remove('show');
   setTimeout(() => drawerWrap.classList.remove('open'), 240);
@@ -6509,6 +6543,7 @@ async function switchChat(it) {
     const upto = await loadSaid();     // 只拉这一窗的历史
     cursor = upto || 0;                // 游标跳过已经过去的事件，别重放上一个窗口的
     loadAvatarPrefs(currentSid);       // 这一窗有自己的一张脸
+    renderDrawerChats();               // 抽屉里的高亮跟着换
     setTitle(it.name || '');
     note('（换到「' + (it.name || '没名字') + '」）');
     scroll(true);
