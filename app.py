@@ -28,6 +28,7 @@ import datetime
 import hashlib
 import json
 import os
+import random
 import re
 import socket
 import threading
@@ -834,6 +835,144 @@ def api_memory_restore(mid):
         return jsonify({"ok": False, "error": "记忆不存在"}), 404
     db.restore_memory(mid)
     return jsonify({"ok": True})
+
+
+# ---------- 9. 头像库 ----------
+# 头像文件放 data/avatars/（不进 git），当前用哪张记在 data/ui.json。
+# 默认两张是 static 里的 SVG：一只鲸鱼 + 一个"我"。
+
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+AVATAR_DIR = os.path.join(DATA_DIR, "avatars")
+UI_JSON = os.path.join(DATA_DIR, "ui.json")
+
+AV_BUILTIN = [
+    {"name": "whale.svg", "url": "avatars/whale.svg", "label": "鲸鱼"},
+    {"name": "me.svg", "url": "avatars/me.svg", "label": "默认的我"},
+]
+AV_FALLBACK = {"ai": "whale.svg", "me": "me.svg"}
+AV_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+AV_MAX_BYTES = 8 * 1024 * 1024
+
+
+def _ui_read():
+    try:
+        with open(UI_JSON, "r", encoding="utf-8") as f:
+            d = json.load(f)
+            if isinstance(d, dict):
+                return d
+    except Exception:
+        pass
+    return {}
+
+
+def _ui_write(d):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with open(UI_JSON, "w", encoding="utf-8") as f:
+        json.dump(d, f, ensure_ascii=False, indent=2)
+    return d
+
+
+def _avatar_name(slot):
+    """某一格现在用的是哪个文件（ai / me）。"""
+    return _ui_read().get("%s_avatar" % slot) or AV_FALLBACK[slot]
+
+
+def _avatar_url(name):
+    if not name or name in ("whale.svg", "me.svg"):
+        return "avatars/" + (name or "whale.svg")
+    return "ava/" + name
+
+
+def _avatar_payload():
+    items = [dict(x, builtin=True, url=x["url"]) for x in AV_BUILTIN]
+    if os.path.isdir(AVATAR_DIR):
+        names = [f for f in os.listdir(AVATAR_DIR)
+                 if os.path.splitext(f)[1].lower() in AV_EXTS
+                 and os.path.isfile(os.path.join(AVATAR_DIR, f))]
+        names.sort(key=lambda f: os.path.getmtime(os.path.join(AVATAR_DIR, f)),
+                   reverse=True)
+        for fn in names:
+            items.append({"name": fn, "url": "ava/" + fn, "builtin": False,
+                          "at": int(os.path.getmtime(os.path.join(AVATAR_DIR, fn)))})
+    picked = {"ai": _avatar_name("ai"), "me": _avatar_name("me")}
+    return {
+        "ok": True,
+        "items": items,
+        "current": {"ai": _avatar_url(picked["ai"]), "me": _avatar_url(picked["me"])},
+        "picked": picked,
+    }
+
+
+@app.route("/ava/<path:name>")
+def avatar_file(name):
+    return send_from_directory(AVATAR_DIR, name)
+
+
+@app.route("/api/avatars")
+def api_avatars():
+    return jsonify(_avatar_payload())
+
+
+@app.route("/api/avatars", methods=["POST"])
+def api_avatar_upload():
+    f = request.files.get("file")
+    if f is None or not (f.filename or "").strip():
+        return jsonify({"ok": False, "error": "没收到图片"}), 400
+    ext = os.path.splitext(f.filename)[1].lower()
+    if ext not in AV_EXTS:
+        ext = ".jpg"
+    data = f.read()
+    if not data:
+        return jsonify({"ok": False, "error": "图片是空的"}), 400
+    if len(data) > AV_MAX_BYTES:
+        return jsonify({"ok": False, "error": "图片太大了（上限 8MB）"}), 400
+    os.makedirs(AVATAR_DIR, exist_ok=True)
+    name = "av-%d-%04d%s" % (int(time.time()), random.randint(0, 9999), ext)
+    with open(os.path.join(AVATAR_DIR, name), "wb") as fp:
+        fp.write(data)
+    return jsonify({"ok": True, "item": {"name": name, "url": "ava/" + name,
+                                         "builtin": False},
+                    "picked": {"ai": _avatar_name("ai"), "me": _avatar_name("me")}})
+
+
+@app.route("/api/avatars/<path:name>", methods=["DELETE"])
+def api_avatar_delete(name):
+    safe = os.path.basename(name)
+    if safe in ("whale.svg", "me.svg"):
+        return jsonify({"ok": False, "error": "默认头像不能删"}), 400
+    path = os.path.join(AVATAR_DIR, safe)
+    if not os.path.isfile(path):
+        return jsonify({"ok": False, "error": "没有这张"}), 404
+    os.remove(path)
+    d = _ui_read()
+    changed = False
+    for slot in ("ai", "me"):
+        if d.get("%s_avatar" % slot) == safe:
+            d.pop("%s_avatar" % slot, None)
+            changed = True
+    if changed:
+        _ui_write(d)
+    return jsonify(_avatar_payload())
+
+
+@app.route("/api/avatar", methods=["POST"])
+def api_avatar_pick():
+    data = request.get_json(silent=True) or {}
+    slot = data.get("slot")
+    name = (data.get("name") or "").strip()
+    if slot not in ("ai", "me"):
+        return jsonify({"ok": False, "error": "slot 只能是 ai 或 me"}), 400
+    if name not in ("whale.svg", "me.svg"):
+        safe = os.path.basename(name)
+        if not safe or not os.path.isfile(os.path.join(AVATAR_DIR, safe)):
+            return jsonify({"ok": False, "error": "没有这张头像"}), 404
+        name = safe
+    d = _ui_read()
+    d["%s_avatar" % slot] = name
+    _ui_write(d)
+    out = _avatar_payload()
+    out["slot"] = slot
+    return jsonify(out)
 
 
 def _lan_ips():

@@ -239,12 +239,47 @@ html[data-theme="dark"] .glass,
     font-size: 13px; padding: 6px 16px; border-radius: 14px;
   }
   .row { width: 100%; max-width: 720px; margin: 0 auto; }
-  .row.me { display: flex; justify-content: flex-end; }
+  .row.me { display: flex; justify-content: flex-end; align-items: flex-start; gap: 10px; }
+  .row.gu-row { display: flex; justify-content: flex-start; align-items: flex-start; gap: 10px; }
+  .msgwrap { min-width: 0; flex: 0 1 auto; max-width: calc(100% - 44px); }
+  .row.me .msgwrap { display: flex; flex-direction: column; align-items: flex-end; }
+  .avatar { width: 34px; height: 34px; border-radius: 50%; flex: none; object-fit: cover;
+    background: var(--panel); box-shadow: inset 0 0 0 1px rgba(0,0,0,.07); }
+  .meta { display: flex; gap: 8px; align-items: baseline; font-size: 11.5px;
+    color: var(--dim); margin: 0 4px 5px; line-height: 1.2; letter-spacing: .02em; }
+  .row.me .meta { justify-content: flex-end; }
   .bubble {
     background: var(--user-bubble); border-radius: 18px; padding: 10px 16px;
-    max-width: 85%; white-space: pre-wrap; word-break: break-word;
+    max-width: 100%; white-space: pre-wrap; word-break: break-word;
   }
-  .gu { white-space: pre-wrap; word-break: break-word; }
+  .gu {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 11px 15px; max-width: 100%;
+    white-space: pre-wrap; word-break: break-word;
+    box-shadow: 0 1px 3px rgba(0,0,0,.035);
+  }
+
+  /* ---- 头像库 ---- */
+  .av-now { display: flex; gap: 18px; justify-content: center; margin: 4px 0 16px; }
+  .av-now-item { text-align: center; font-size: 12px; color: var(--dim); }
+  .av-now-item img { width: 62px; height: 62px; border-radius: 50%; object-fit: cover;
+    display: block; margin: 0 auto 6px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.07); }
+  .av-up { display: block; width: 100%; border: 0; border-radius: 14px; padding: 13px;
+    font: inherit; background: var(--panel); color: var(--text); margin-bottom: 18px; }
+  .av-hint { font-size: 12.5px; color: var(--dim); margin: 0 2px 10px; line-height: 1.6; }
+  .av-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 18px; }
+  .av-tile { position: relative; border: 0; background: none; padding: 0; }
+  .av-tile img { width: 100%; aspect-ratio: 1; border-radius: 50%; object-fit: cover;
+    box-shadow: 0 0 0 1px var(--line); }
+  .av-tile.on img { box-shadow: 0 0 0 3px var(--accent); }
+  .av-tile .x { position: absolute; top: -4px; right: -4px; width: 20px; height: 20px;
+    border-radius: 50%; background: var(--red); color: #fff; font-size: 13px; line-height: 20px;
+    text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+  .av-loading { text-align: center; color: var(--dim); font-size: 14px; padding: 36px 0; }
+  .av-actions { display: flex; gap: 10px; }
+  .av-actions button { flex: 1; border: 0; border-radius: 13px; padding: 13px 8px; font: inherit; }
+  .av-actions .primary { background: var(--accent); color: #fff; }
+  .av-actions .plain { background: var(--panel); color: var(--text); }
   .gu img.chatimg, .bubble img.chatimg {
     max-width: min(240px, 70%); border-radius: 14px; display: block; margin: 6px 0;
   }
@@ -330,8 +365,10 @@ html[data-theme="dark"] .glass,
   }
 
   #pet {
-    position: fixed; right: 8px; bottom: calc(118px + env(safe-area-inset-bottom));
-    width: 128px; height: 128px; z-index: 30; cursor: grab;
+    /* 桌宠：缩到 48px，正好站在输入区上面那条空白里，不压到字 */
+    position: fixed; right: 10px; bottom: calc(96px + env(safe-area-inset-bottom));
+    width: 48px; height: 48px; z-index: 30; cursor: grab; opacity: .85;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,.12));
     -webkit-user-select: none; user-select: none; touch-action: none;
   }
   #pet:active { cursor: grabbing; }
@@ -1751,6 +1788,10 @@ html[data-theme="dark"] #newSession { background: #f5f4ef; color: #262624; }
       <div class="group">
         <button class="grow" id="memoryRow"><span class="ic" data-i="book"></span>我的记忆<span class="val">看看 AI 记住了什么</span><span class="chev">›</span></button>
       </div>
+      <div class="group-label">样子</div>
+      <div class="group">
+        <button class="grow" id="avatarRow"><span class="ic" data-i="user"></span>头像<span class="val">他和我用哪张</span><span class="chev">›</span></button>
+      </div>
     </div>
   </div>
 </div>
@@ -1765,6 +1806,20 @@ html[data-theme="dark"] #newSession { background: #f5f4ef; color: #262624; }
       <button class="hbtn" data-close="memory"><span class="ic" data-i="x"></span></button>
     </div>
     <div class="body" id="memBody"></div>
+  </div>
+</div>
+
+<div class="sheetWrap" id="avatarSheet">
+  <div class="shade" data-close="avatar"></div>
+  <div class="sheet">
+    <div class="grabber"></div>
+    <div class="head">
+      <button class="hbtn" data-close="avatar"><span class="ic" data-i="x"></span></button>
+      <div class="ht">头像</div>
+      <div class="hspace"></div>
+    </div>
+    <div class="body" id="avatarBody"></div>
+    <input type="file" id="avatarFile" accept="image/*" style="display:none">
   </div>
 </div>
 
@@ -2129,6 +2184,11 @@ const PET = {
 };
 let petState = 'idle';
 let petTimer = null;
+// 素材缺了就别留一个破图框在那儿戳眼睛
+petImg.addEventListener('error', () => {
+  const box = document.getElementById('pet');
+  if (box) box.style.display = 'none';
+});
 let lastEventAt = Date.now();
 function petSet(state, holdMs) {
   if (petState === state && !holdMs) return;
@@ -2194,12 +2254,63 @@ function row(cls) {
   log.appendChild(d);
   return d;
 }
-function addMe(text) {
+
+/* ---------- 头像与时间 ---------- */
+let AVATAR_SRC = { ai: 'avatars/whale.svg', me: 'avatars/me.svg' };
+const AVATAR_DEFAULT = { ai: 'avatars/whale.svg', me: 'avatars/me.svg' };
+
+function fmtClock(ts) {
+  const d = ts ? new Date(ts * 1000) : new Date();
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+function fmtDay(ts) {
+  const d = new Date((ts || Date.now() / 1000) * 1000);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return '';
+  return (d.getMonth() + 1) + '月' + d.getDate() + '日';
+}
+function metaLine(who, ts) {
+  const m = document.createElement('div');
+  m.className = 'meta';
+  const day = fmtDay(ts);
+  if (day) {
+    const s1 = document.createElement('span');
+    s1.textContent = day;
+    m.appendChild(s1);
+  }
+  const t = document.createElement('span');
+  t.textContent = fmtClock(ts);
+  m.appendChild(t);
+  return m;
+}
+function avatarEl(who) {
+  const img = document.createElement('img');
+  img.className = 'avatar';
+  img.alt = '';
+  img.dataset.slot = who;
+  img.src = AVATAR_SRC[who] || AVATAR_DEFAULT[who];
+  return img;
+}
+function applyAvatars(cur) {
+  if (!cur) return;
+  AVATAR_SRC.ai = cur.ai || AVATAR_DEFAULT.ai;
+  AVATAR_SRC.me = cur.me || AVATAR_DEFAULT.me;
+  document.querySelectorAll('#log .avatar[data-slot]').forEach(img => {
+    const slot = img.dataset.slot;
+    if (AVATAR_SRC[slot]) img.src = AVATAR_SRC[slot];
+  });
+}
+function addMe(text, at) {
   const r = row('me');
+  const wrap = document.createElement('div');
+  wrap.className = 'msgwrap';
+  wrap.appendChild(metaLine('me', at));
   const b = document.createElement('div');
   b.className = 'bubble';
   b.textContent = text;
-  r.appendChild(b);
+  wrap.appendChild(b);
+  r.appendChild(wrap);
+  r.appendChild(avatarEl('me'));
   renderRich(b);
   scroll(true);
   guEl = null; endThink(); closeGroup();
@@ -2268,13 +2379,18 @@ function openThinkSheet(idx) {
   thinkBodyEl.textContent = thinkStore[idx].text;
   sheets.think.classList.add('open');
 }
-function ensureGu() {
+function ensureGu(at) {
   if (guEl) return guEl;
   closeThink(); closeGroup();
-  const r = row();
+  const r = row('gu-row');
+  r.appendChild(avatarEl('ai'));
+  const wrap = document.createElement('div');
+  wrap.className = 'msgwrap';
+  wrap.appendChild(metaLine('ai', at));
   const d = document.createElement('div');
   d.className = 'gu';
-  r.appendChild(d);
+  wrap.appendChild(d);
+  r.appendChild(wrap);
   guEl = d;
   scroll();
   return guEl;
@@ -2884,10 +3000,10 @@ toolBack.onclick = () => {
 
 function renderSaid(msgs) {
   for (const m of msgs) {
-    if (m.kind === 'me') { endThink(); addMe(m.text); }
+    if (m.kind === 'me') { endThink(); addMe(m.text, m.at); }
     else if (m.kind === 'gu') {
       endThink();                    // 该说正文了，思考那段收工
-      const el = ensureGu();
+      const el = ensureGu(m.at);
       el._raw = m.text;
       el._final = true;              // 这是说完了的，谁都别再画它
       el.textContent = m.text;
@@ -3015,6 +3131,7 @@ async function poll() {
   }
 }
 // 先把说完的话照着念一遍，游标落在最后一条上；之后的（正在说的那轮）才走事件流
+loadAvatarPrefs();
 loadSaid().then((upto) => { if (upto) cursor = upto; poll(); });
 
 document.addEventListener('visibilitychange', async () => {
@@ -3538,6 +3655,7 @@ const sheets = {
   api: document.getElementById('apiSheet'),
   settings: document.getElementById('settingsSheet'),
   memory: document.getElementById('memorySheet'),
+  avatar: document.getElementById('avatarSheet'),
   usage: document.getElementById('usageSheet'),
   model: document.getElementById('modelSheet'),
   add: document.getElementById('addSheet'),
@@ -5380,6 +5498,183 @@ const MEM_KIND = { fact: '关于我', preference: '偏好', goal: '目标', proj
 const memState = { q: '', kind: '', deleted: false };
 let memList = [];
 
+/* ---------- 头像库 ---------- */
+const AV_BUILTIN = ['whale.svg', 'me.svg'];
+let avData = null;
+let avPick = null;
+
+function avatarUrlOf(name) {
+  if (!name) return '';
+  if (name === 'whale.svg') return AVATAR_DEFAULT.ai;
+  if (name === 'me.svg') return AVATAR_DEFAULT.me;
+  return 'ava/' + name;
+}
+
+async function loadAvatarPrefs() {
+  try {
+    const d = await (await fetch('api/avatars', { cache: 'no-store' })).json();
+    if (d && d.current) applyAvatars(d.current);
+  } catch (e) {}
+}
+
+async function openAvatarSheet() {
+  sheets.avatar.classList.add('open');
+  await renderAvatarSheet();
+}
+
+async function renderAvatarSheet() {
+  const body = document.getElementById('avatarBody');
+  body.innerHTML = '<div class="av-loading">正在拿…</div>';
+  try {
+    avData = await (await fetch('api/avatars', { cache: 'no-store' })).json();
+    applyAvatars(avData.current);
+  } catch (e) {
+    body.innerHTML = '<div class="av-loading">头像库暂时拿不到，等会儿再试</div>';
+    return;
+  }
+  const cur = avData.current || {};
+  const items = avData.items || [];
+  const picked = (avData.picked && avData.picked.ai) || 'whale.svg';
+  if (!avPick) avPick = picked;
+  if (avPick && !items.some(i => i.name === avPick)) avPick = items[0] && items[0].name;
+
+  body.innerHTML = '';
+
+  const now = document.createElement('div');
+  now.className = 'av-now';
+  [['ai', '他'], ['me', '我']].forEach(([slot, label]) => {
+    const box = document.createElement('div');
+    box.className = 'av-now-item';
+    const img = document.createElement('img');
+    img.src = cur[slot] || AVATAR_DEFAULT[slot];
+    img.alt = '';
+    const t = document.createElement('div');
+    t.textContent = label;
+    box.append(img, t);
+    now.appendChild(box);
+  });
+  body.appendChild(now);
+
+  const up = document.createElement('button');
+  up.className = 'av-up';
+  up.textContent = '＋ 从相册上传一张';
+  up.onclick = () => document.getElementById('avatarFile').click();
+  body.appendChild(up);
+
+  const hint = document.createElement('div');
+  hint.className = 'av-hint';
+  hint.textContent = '点一张选中，再点下面的按钮决定给谁用。上传的图会裁成正方形、压到 512px，只存在你的电脑里。';
+  body.appendChild(hint);
+
+  const grid = document.createElement('div');
+  grid.className = 'av-grid';
+  items.forEach(it => {
+    const tile = document.createElement('button');
+    tile.className = 'av-tile' + (it.name === avPick ? ' on' : '');
+    const img = document.createElement('img');
+    img.src = it.url;
+    img.alt = it.name;
+    tile.appendChild(img);
+    tile.onclick = () => {
+      avPick = it.name;
+      grid.querySelectorAll('.av-tile').forEach(t => t.classList.remove('on'));
+      tile.classList.add('on');
+    };
+    if (!it.builtin) {
+      const x = document.createElement('span');
+      x.className = 'x';
+      x.textContent = '×';
+      x.onclick = async (ev) => {
+        ev.stopPropagation();
+        if (!confirm('删掉这张头像？')) return;
+        try {
+          const r = await fetch('api/avatars/' + encodeURIComponent(it.name), { method: 'DELETE' });
+          const d = await r.json();
+          if (!r.ok || !d.ok) throw new Error(d.error || '删不掉');
+          if (avPick === it.name) avPick = null;
+          await renderAvatarSheet();
+        } catch (e) { note('（' + (e.message || '删不掉') + '）', 'err'); }
+      };
+      tile.appendChild(x);
+    }
+    grid.appendChild(tile);
+  });
+  body.appendChild(grid);
+
+  const acts = document.createElement('div');
+  acts.className = 'av-actions';
+  const b1 = document.createElement('button');
+  b1.className = 'primary';
+  b1.textContent = '设为他的头像';
+  b1.onclick = () => pickAvatar('ai');
+  const b2 = document.createElement('button');
+  b2.className = 'plain';
+  b2.textContent = '设为我的头像';
+  b2.onclick = () => pickAvatar('me');
+  acts.append(b1, b2);
+  body.appendChild(acts);
+}
+
+async function pickAvatar(slot) {
+  if (!avPick) { note('（先点一张头像）'); return; }
+  try {
+    const r = await fetch('api/avatar', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slot: slot, name: avPick })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || '没换上');
+    applyAvatars(d.current);
+    await renderAvatarSheet();
+    note(slot === 'ai' ? '（他的头像换了）' : '（你的头像换了）');
+  } catch (e) { note('（' + (e.message || '没换上') + '）', 'err'); }
+}
+
+function avatarBlob(file) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const side = Math.min(img.width, img.height);
+      const s = Math.min(1, 512 / side);
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(side * s);
+      cv.height = Math.round(side * s);
+      cv.getContext('2d').drawImage(
+        img, (img.width - side) / 2, (img.height - side) / 2, side, side,
+        0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(url);
+      cv.toBlob(b => resolve(b), 'image/jpeg', 0.88);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+
+async function uploadAvatarFile(file) {
+  if (!file) return;
+  note('（正在存…）');
+  const blob = await avatarBlob(file);
+  if (!blob) { note('（这张图读不出来，换一张试试）', 'err'); return; }
+  const fd = new FormData();
+  fd.append('file', blob, 'avatar.jpg');
+  try {
+    const r = await fetch('api/avatars', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error || '没存上');
+    avPick = d.item.name;
+    await renderAvatarSheet();
+    note('（存好了，选一下给谁用）');
+  } catch (e) { note('（' + (e.message || '没存上') + '）', 'err'); }
+}
+
+document.getElementById('avatarFile').onchange = (e) => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = '';
+  uploadAvatarFile(f);
+};
+document.getElementById('avatarRow').onclick = () => { sheets.settings.classList.remove('open'); openAvatarSheet(); };
+
 document.getElementById('memoryRow').onclick = () => {
   sheets.settings.classList.remove('open');
   sheets.memory.classList.add('open');
@@ -5584,9 +5879,7 @@ async function armNewChat() {
     await fetch('api/newchat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"arm":true}' });
   } catch { note('（没接上，再试一次）', 'err'); return; }
   closeDrawer();
-  log.innerHTML = '';                     // 界面先空出来，但那边还没真的换
-  guEl = null;
-  earliestSeq = null; olderBtn = null;    // 翻老账的游标也归零，别拿着旧窗口的号翻新窗口
+  resetChatUI();                          // 界面先空出来，但那边还没真的换
   setArmed(true);
   scroll(true);
 }
@@ -6185,16 +6478,36 @@ async function loadChats() {
   } catch { body.innerHTML = '<div class="gnote">拿不到窗口清单，等会儿再试</div>'; }
 }
 
+/* 换窗口：不再整页重载。
+   原来 location.reload() 要把 300KB 的页面重新下载、重新解析、重新拉一遍历史——
+   手机上就是"点了没反应，卡好几秒"。改成原地清屏 + 只拉这一窗的历史。 */
+function resetChatUI() {
+  log.innerHTML = '';
+  guEl = null; turnThink = null; curGroup = null;
+  thinkStore.length = 0; curThinkIdx = -1;
+  earliestSeq = null; olderBtn = null; loadingOlder = false;
+  endThink(); closeGroup();
+}
+
 async function switchChat(it) {
   if (it.current) { sheets.chats.classList.remove('open'); return; }
   if (it.archived) { note('（这间收起来了——先从收纳里放出来才能进）'); return; }
   try {
+    if (guBusy) { try { await fetch('api/stop', { method: 'POST' }); } catch (e) {} setBusy(false); }
     await fetch('api/chats', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'switch', id: it.id })
     });
-    location.reload();          // 换了一副记忆，界面整个重来最干净
-  } catch { note('（没切成，再试一次）', 'err'); }
+    resetChatUI();
+    sheets.chats.classList.remove('open');
+    const upto = await loadSaid();     // 只拉这一窗的历史
+    cursor = upto || 0;                // 游标跳过已经过去的事件，别重放上一个窗口的
+    setTitle(it.name || '');
+    note('（换到「' + (it.name || '没名字') + '」）');
+    scroll(true);
+  } catch (e) {
+    note('（没切成，再试一次）', 'err');
+  }
 }
 
 document.getElementById('chatsMenu').onclick = () => {
