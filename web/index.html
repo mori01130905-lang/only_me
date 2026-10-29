@@ -1677,7 +1677,7 @@ html[data-theme="dark"] #newSession { background: #f5f4ef; color: #262624; }
 <body>
 
 <header>
-  <button class="iconbtn glass" id="menuBtn" title="打开侧边栏"><span class="ic" data-i="chevL"></span></button>
+  <button class="iconbtn glass" id="menuBtn" title="打开侧边栏"><span class="ic" data-i="menu"></span></button>
   <div class="title">
     <h1>Claude</h1>
     <div class="sub">Claude Code</div>
@@ -1751,9 +1751,6 @@ html[data-theme="dark"] #newSession { background: #f5f4ef; color: #262624; }
       <button class="item" id="navNews"><span class="ic" data-i="fileText"></span>日报</button>
       <button class="item" id="navHealth"><span class="ic" data-i="heartIc"></span>健康</button>
       <button class="item" id="navRepo"><span class="ic" data-i="box"></span>仓库</button>
-      <div class="sect">Recents</div>
-      <button class="recent" id="recGu">Claude</button>
-      <button class="recent" id="recGong">另一位</button>
     </div>
     <div class="drawer-foot">
       <button id="avatarBtn" title="我的主页">Me</button>
@@ -6124,12 +6121,6 @@ document.getElementById('gongInput').addEventListener('input', (e) => {
 document.getElementById('gongInput').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendGong(); }
 });
-document.getElementById('recGong').onclick = () => {
-  closeDrawer(); sheets.gong.classList.add('open'); loadGong();
-};
-document.getElementById('recGu').onclick = () => {
-  closeDrawer(); sheets.chats.classList.add('open'); loadChats();
-};
 
 /* ---------- 健康 ---------- */
 const HEALTH_GROUPS = [
