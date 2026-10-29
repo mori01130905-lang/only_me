@@ -1751,6 +1751,8 @@ html[data-theme="dark"] #newSession { background: #f5f4ef; color: #262624; }
       <button class="item" id="navNews"><span class="ic" data-i="fileText"></span>日报</button>
       <button class="item" id="navHealth"><span class="ic" data-i="heartIc"></span>健康</button>
       <button class="item" id="navRepo"><span class="ic" data-i="box"></span>仓库</button>
+      <div class="sect"></div>
+      <button class="item" id="navChat"><span class="ic" data-i="chat"></span>Chat</button>
     </div>
     <div class="drawer-foot">
       <button id="avatarBtn" title="我的主页">Me</button>
@@ -3029,6 +3031,7 @@ async function loadSaid() {
     const r = await fetch('api/messages?limit=400', { cache: 'no-store' });
     if (!r.ok) return 0;
     const d = await r.json();
+    if (d.sid != null) currentSid = d.sid;
     const msgs = d.msgs || [];
     renderSaid(msgs);
     healEmptyGu();
@@ -3039,6 +3042,7 @@ async function loadSaid() {
   } catch (e) { return 0; }
 }
 
+let currentSid = null;       // 现在这一窗的 session id（每个窗口可以有自己的头像）
 let earliestSeq = null;      // 已经摆出来的最早一条 seq
 let loadingOlder = false;
 let olderBtn = null;
@@ -3128,8 +3132,7 @@ async function poll() {
   }
 }
 // 先把说完的话照着念一遍，游标落在最后一条上；之后的（正在说的那轮）才走事件流
-loadAvatarPrefs();
-loadSaid().then((upto) => { if (upto) cursor = upto; poll(); });
+loadSaid().then((upto) => { if (upto) cursor = upto; loadAvatarPrefs(currentSid); poll(); });
 
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState !== 'visible') return;
@@ -3583,11 +3586,20 @@ function openDrawer() {
   requestAnimationFrame(() => drawerWrap.classList.add('show'));
 }
 document.getElementById('menuBtn').onclick = async () => {
-  if (armedFresh) {
+  if (armedFresh) {                       // 上膛了还没说话：等于取消换新
     try { await fetch('api/newchat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"arm":false}' }); } catch {}
-    location.reload();          // 旧窗口的话都在那边，重新拉一遍最干净
+    setArmed(false);
+    resetChatUI();
+    const upto = await loadSaid();
+    cursor = upto || 0;
+    note('（不换了，还住这一条里）');
     return;
   }
+  openDrawer();
+};
+
+document.getElementById('navChat').onclick = () => {
+  closeDrawer();
   sheets.chats.classList.add('open');
   loadChats();
 };
@@ -5507,10 +5519,12 @@ function avatarUrlOf(name) {
   return 'ava/' + name;
 }
 
-async function loadAvatarPrefs() {
+async function loadAvatarPrefs(sid) {
   try {
-    const d = await (await fetch('api/avatars', { cache: 'no-store' })).json();
+    const q = (sid != null) ? ('?sid=' + encodeURIComponent(sid)) : '';
+    const d = await (await fetch('api/avatars' + q, { cache: 'no-store' })).json();
     if (d && d.current) applyAvatars(d.current);
+    if (d) avData = d;
   } catch (e) {}
 }
 
@@ -5523,7 +5537,8 @@ async function renderAvatarSheet() {
   const body = document.getElementById('avatarBody');
   body.innerHTML = '<div class="av-loading">正在拿…</div>';
   try {
-    avData = await (await fetch('api/avatars', { cache: 'no-store' })).json();
+    const q = (currentSid != null) ? ('?sid=' + encodeURIComponent(currentSid)) : '';
+    avData = await (await fetch('api/avatars' + q, { cache: 'no-store' })).json();
     applyAvatars(avData.current);
   } catch (e) {
     body.innerHTML = '<div class="av-loading">头像库暂时拿不到，等会儿再试</div>';
@@ -5560,7 +5575,7 @@ async function renderAvatarSheet() {
 
   const hint = document.createElement('div');
   hint.className = 'av-hint';
-  hint.textContent = '点一张选中，再点下面的按钮决定给谁用。上传的图会裁成正方形、压到 512px，只存在你的电脑里。';
+  hint.textContent = '点一张选中，再点下面的按钮决定给谁用。「他的头像」只对当前这个窗口生效——换个窗口可以是另一张脸。上传的图会裁成正方形、压到 512px，只存在你的电脑里。';
   body.appendChild(hint);
 
   const grid = document.createElement('div');
@@ -5617,7 +5632,7 @@ async function pickAvatar(slot) {
   try {
     const r = await fetch('api/avatar', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slot: slot, name: avPick })
+      body: JSON.stringify({ slot: slot, name: avPick, session_id: currentSid })
     });
     const d = await r.json();
     if (!r.ok || !d.ok) throw new Error(d.error || '没换上');
@@ -6493,6 +6508,7 @@ async function switchChat(it) {
     sheets.chats.classList.remove('open');
     const upto = await loadSaid();     // 只拉这一窗的历史
     cursor = upto || 0;                // 游标跳过已经过去的事件，别重放上一个窗口的
+    loadAvatarPrefs(currentSid);       // 这一窗有自己的一张脸
     setTitle(it.name || '');
     note('（换到「' + (it.name || '没名字') + '」）');
     scroll(true);

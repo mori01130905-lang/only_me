@@ -255,7 +255,7 @@ def api_messages():
     with events_lock:
         upto = len(events)
 
-    return jsonify({"msgs": msgs, "more": more, "upto": upto})
+    return jsonify({"msgs": msgs, "more": more, "upto": upto, "sid": sid})
 
 
 # ---------- 2. 长轮询：拿新事件 ----------
@@ -883,7 +883,17 @@ def _avatar_url(name):
     return "ava/" + name
 
 
-def _avatar_payload():
+def _session_avatar(sid):
+    """这一窗用的 AI 头像；没单独设过就退回全局默认。"""
+    d = _ui_read()
+    if sid is not None:
+        name = (d.get("session_ai") or {}).get(str(sid))
+        if name:
+            return name
+    return d.get("ai_avatar") or AV_FALLBACK["ai"]
+
+
+def _avatar_payload(sid=None):
     items = [dict(x, builtin=True, url=x["url"]) for x in AV_BUILTIN]
     if os.path.isdir(AVATAR_DIR):
         names = [f for f in os.listdir(AVATAR_DIR)
@@ -894,7 +904,7 @@ def _avatar_payload():
         for fn in names:
             items.append({"name": fn, "url": "ava/" + fn, "builtin": False,
                           "at": int(os.path.getmtime(os.path.join(AVATAR_DIR, fn)))})
-    picked = {"ai": _avatar_name("ai"), "me": _avatar_name("me")}
+    picked = {"ai": _session_avatar(sid), "me": _avatar_name("me")}
     return {
         "ok": True,
         "items": items,
@@ -910,7 +920,12 @@ def avatar_file(name):
 
 @app.route("/api/avatars")
 def api_avatars():
-    return jsonify(_avatar_payload())
+    sid = request.args.get("sid")
+    try:
+        sid = int(sid) if sid not in (None, "", "null") else None
+    except (TypeError, ValueError):
+        sid = None
+    return jsonify(_avatar_payload(sid))
 
 
 @app.route("/api/avatars", methods=["POST"])
@@ -950,6 +965,14 @@ def api_avatar_delete(name):
         if d.get("%s_avatar" % slot) == safe:
             d.pop("%s_avatar" % slot, None)
             changed = True
+    per = dict(d.get("session_ai") or {})
+    for k in [k for k, v in per.items() if v == safe]:
+        per.pop(k, None)
+        changed = True
+    if per:
+        d["session_ai"] = per
+    elif "session_ai" in d:
+        d.pop("session_ai", None)
     if changed:
         _ui_write(d)
     return jsonify(_avatar_payload())
@@ -967,10 +990,22 @@ def api_avatar_pick():
         if not safe or not os.path.isfile(os.path.join(AVATAR_DIR, safe)):
             return jsonify({"ok": False, "error": "没有这张头像"}), 404
         name = safe
+    sid = data.get("session_id")
+    try:
+        sid = int(sid) if sid not in (None, "", "null") else None
+    except (TypeError, ValueError):
+        sid = None
+
     d = _ui_read()
-    d["%s_avatar" % slot] = name
+    if slot == "ai" and sid is not None:
+        # 只改这一窗的脸，不动别的窗口
+        per = dict(d.get("session_ai") or {})
+        per[str(sid)] = name
+        d["session_ai"] = per
+    else:
+        d["%s_avatar" % slot] = name
     _ui_write(d)
-    out = _avatar_payload()
+    out = _avatar_payload(sid)
     out["slot"] = slot
     return jsonify(out)
 
