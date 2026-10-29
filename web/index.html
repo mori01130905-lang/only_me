@@ -364,16 +364,6 @@ html[data-theme="dark"] .glass,
     border-left: 2px solid var(--red); padding-left: 12px; white-space: pre-wrap;
   }
 
-  #pet {
-    /* 桌宠：缩到 48px，正好站在输入区上面那条空白里，不压到字 */
-    position: fixed; right: 10px; bottom: calc(96px + env(safe-area-inset-bottom));
-    width: 48px; height: 48px; z-index: 30; cursor: grab; opacity: .85;
-    filter: drop-shadow(0 2px 6px rgba(0,0,0,.12));
-    -webkit-user-select: none; user-select: none; touch-action: none;
-  }
-  #pet:active { cursor: grabbing; }
-  #pet img { width: 100%; height: 100%; display: block; pointer-events: none; }
-
   /* ============ 输入区 ============ */
   footer {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
@@ -520,9 +510,11 @@ html[data-theme="dark"] .composer {
     box-shadow: 4px 0 24px rgba(0,0,0,.12);
   }
   #drawerWrap.show #drawer { transform: none; }
+  /* 原来这儿是巨大的 "Claude"。字去掉了，高度留着占位，以后想放别的直接用 */
   .brand {
     font-family: var(--serif); font-size: 30px; font-weight: 700;
     padding: 6px 24px 18px; letter-spacing: .01em;
+    height: 75px;
   }
   .nav { flex: 1; overflow-y: auto; padding: 0 12px; }
   .nav .item {
@@ -1696,7 +1688,6 @@ html[data-theme="dark"] #newSession { background: #f5f4ef; color: #262624; }
 </header>
 
 <div id="log"></div>
-<div id="pet" title="他在这儿"><img id="petImg" src="pet/clawd-idle-follow.svg" alt=""></div>
 
 <footer>
   <div id="doingLine"><span class="pill"><span class="w"></span><span class="en"></span><span class="t"></span></span></div>
@@ -1751,7 +1742,8 @@ html[data-theme="dark"] #newSession { background: #f5f4ef; color: #262624; }
 <div id="drawerWrap">
   <div class="shade" data-close="drawer"></div>
   <div id="drawer">
-    <div class="brand">Claude</div>
+    <!-- 预留：这块空位留给以后放 logo / 名字 -->
+    <div class="brand" aria-hidden="true"></div>
     <div class="nav">
       <button class="item on"><span class="ic" data-i="chat"></span>聊天</button>
       <button class="item" id="navTodo"><span class="ic" data-i="checkSquare"></span>待办</button>
@@ -2180,77 +2172,7 @@ const log = document.getElementById('log');
 const box = document.getElementById('box');
 const sendBtn = document.getElementById('send');
 
-/* ---------- 小螃蟹 ---------- */
-const petImg = document.getElementById('petImg');
-const PET = {
-  idle: 'clawd-idle-follow.svg',
-  thinking: 'clawd-working-thinking.svg',
-  typing: 'clawd-working-typing.svg',
-  happy: 'clawd-happy.svg',
-  doze: 'clawd-idle-doze.svg',
-  sleeping: 'clawd-sleeping.svg',
-  react: 'clawd-react-double-jump.svg',
-};
-let petState = 'idle';
-let petTimer = null;
-// 素材缺了就别留一个破图框在那儿戳眼睛
-petImg.addEventListener('error', () => {
-  const box = document.getElementById('pet');
-  if (box) box.style.display = 'none';
-});
 let lastEventAt = Date.now();
-function petSet(state, holdMs) {
-  if (petState === state && !holdMs) return;
-  petState = state;
-  petImg.src = 'pet/' + (PET[state] || PET.idle);
-  if (petTimer) { clearTimeout(petTimer); petTimer = null; }
-  if (holdMs) petTimer = setTimeout(() => petSet('idle'), holdMs);
-}
-/* 家里没动静：5 分钟打盹，15 分钟睡熟；有动静立刻醒 */
-setInterval(() => {
-  if (petState === 'thinking' || petState === 'typing') return;
-  const quiet = Date.now() - lastEventAt;
-  if (quiet > 15 * 60e3) petSet('sleeping');
-  else if (quiet > 5 * 60e3) petSet('doze');
-}, 30e3);
-/* 拽着满屏跑：拖到哪儿住哪儿（记在 localStorage），轻点一下他跳给你看 */
-const petEl = document.getElementById('pet');
-(function restorePetPos() {
-  try {
-    const p = JSON.parse(localStorage.getItem('petPos'));
-    if (!p) return;
-    const l = Math.min(Math.max(4, p.l), innerWidth - 108);
-    const t = Math.min(Math.max(4, p.t), innerHeight - 108);
-    petEl.style.left = l + 'px'; petEl.style.top = t + 'px';
-    petEl.style.right = 'auto'; petEl.style.bottom = 'auto';
-  } catch {}
-})();
-let pDrag = null;
-petEl.addEventListener('pointerdown', (e) => {
-  const r = petEl.getBoundingClientRect();
-  pDrag = { x: e.clientX, y: e.clientY, left: r.left, top: r.top, w: r.width, h: r.height, moved: false };
-  petEl.setPointerCapture(e.pointerId);
-});
-petEl.addEventListener('pointermove', (e) => {
-  if (!pDrag) return;
-  const dx = e.clientX - pDrag.x, dy = e.clientY - pDrag.y;
-  if (Math.abs(dx) + Math.abs(dy) > 6) pDrag.moved = true;
-  if (!pDrag.moved) return;
-  const l = Math.min(Math.max(4, pDrag.left + dx), innerWidth - pDrag.w - 4);
-  const t = Math.min(Math.max(4, pDrag.top + dy), innerHeight - pDrag.h - 4);
-  petEl.style.left = l + 'px'; petEl.style.top = t + 'px';
-  petEl.style.right = 'auto'; petEl.style.bottom = 'auto';
-});
-petEl.addEventListener('pointerup', () => {
-  if (!pDrag) return;
-  if (pDrag.moved) {
-    const r = petEl.getBoundingClientRect();
-    localStorage.setItem('petPos', JSON.stringify({ l: r.left, t: r.top }));
-  } else {
-    petSet('react', 1800);   // 戳他一下，他跳给你看
-  }
-  pDrag = null;
-});
 
 let guEl = null;
 
@@ -2875,7 +2797,6 @@ function escapeHtml(s) {
 }
 
 function addToolUse(part) {
-  petSet('typing');
   closeThink();
   toolInfo[part.id] = { name: part.name, input: part.input || {}, result: null, isError: false, done: false };
   if (!curGroup) {
@@ -3166,7 +3087,7 @@ setInterval(calDayWatch, 120000);
 
 function handle(d) {
   lastEventAt = Date.now();
-  if (d.type === 'echo') { if (armedFresh) setArmed(false); addMe(d.text); petSet('thinking'); return; }
+  if (d.type === 'echo') { if (armedFresh) setArmed(false); addMe(d.text); return; }
   if (d.type === 'system' && d.subtype === 'newchat') { setArmed(false); log.innerHTML = ''; guEl = null; earliestSeq = null; olderBtn = null; note(d.text); return; }
   if (d.type === 'system' && d.subtype === 'switched') { setArmed(false); log.innerHTML = ''; guEl = null; earliestSeq = null; olderBtn = null; note(d.text); return; }
   if (d.type === 'system' && d.subtype === 'renamed') { setTitle(d.text); return; }
@@ -3175,13 +3096,11 @@ function handle(d) {
     const ev = d.event || {};
     const delta = ev.delta || {};
     if (delta.type === 'thinking_delta' && delta.thinking) {
-      petSet('thinking');
       appendThink(delta.thinking);
       scroll();
       return;
     }
     if (delta.type === 'text_delta' && delta.text) {
-      petSet('typing');
       const el = ensureGu();
       // 上一条已经定稿，现在又开口了——中间没干活，两条话共用这一个泡。
       // 把已经说完的那截钉成"基线"，等下这条的定稿只能接在它后面，不许把它吃掉。
@@ -3259,7 +3178,6 @@ function handle(d) {
       }
     }).catch(() => {});
     setBusy(false);
-    petSet('happy', 4000);
     document.querySelectorAll('.gu').forEach(trimOrphanTail);   // 摘掉被打断的半个字
     renderAllRich();
     if (d.is_error) note('（出错了：' + (d.result || '不知道为什么') + '）', 'err');
@@ -3276,7 +3194,7 @@ function handle(d) {
   if (d.type === 'system' && d.subtype === 'stopped') {
     guEl?.querySelector('.caret')?.remove();
     guEl = null; endThink(); closeGroup();
-    setBusy(false); petSet('calm');
+    setBusy(false);
     note('（我停下了）');
     return;
   }
